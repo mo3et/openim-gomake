@@ -37,11 +37,6 @@ func init() {
 
 	OpenIMRoot = currentDir
 
-	if os.Getenv(DeploymentType) == KUBERNETES {
-		kconfigPath := "/"
-		OpenIMK8sConfig = filepath.Join(kconfigPath, "config") + string(filepath.Separator)
-	}
-
 	OpenIMOutputConfig = filepath.Join(OpenIMRoot, "config") + string(filepath.Separator)
 	OpenIMOutput = filepath.Join(OpenIMRoot, "_output") + string(filepath.Separator)
 
@@ -61,7 +56,6 @@ func init() {
 
 	dirs := []string{
 		OpenIMOutputConfig,
-		OpenIMK8sConfig,
 		OpenIMOutput,
 		OpenIMOutputTools,
 		OpenIMOutputTmp,
@@ -71,6 +65,12 @@ func init() {
 		OpenIMOutputBinToolPath,
 		OpenIMOutputHostBin,
 		OpenIMOutputHostBinTools,
+	}
+
+	if os.Getenv(DeploymentType) == KUBERNETES {
+		kconfigPath := "/"
+		OpenIMK8sConfig = filepath.Join(kconfigPath, "config") + string(filepath.Separator)
+		dirs = append(dirs, OpenIMK8sConfig)
 	}
 
 	for _, dir := range dirs {
