@@ -2,13 +2,13 @@ package mageutil
 
 import (
 	"fmt"
-	"github.com/magefile/mage/sh"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/magefile/mage/sh"
 )
 
 // CheckAndReportBinariesStatus checks the running status of all binary files and reports it.
@@ -87,7 +87,7 @@ func StartToolsAndServices() {
 }
 
 // CompileForPlatform Main compile function
-func CompileForPlatform(platform string) {
+func CompileForPlatform(platform string, compileBinaries []string) {
 
 	PrintBlue(fmt.Sprintf("Compiling cmd for %s...", platform))
 
@@ -118,7 +118,7 @@ func createStartConfigYML(cmdDirs, toolsDirs []string) {
 	}
 	content.WriteString("maxFileDescriptors: 10000\n")
 
-	err := ioutil.WriteFile(configPath, []byte(content.String()), 0644)
+	err := os.WriteFile(configPath, []byte(content.String()), 0644)
 	if err != nil {
 		PrintRed("Failed to create start-config.yml: " + err.Error())
 		return
@@ -205,17 +205,39 @@ func compileDir(sourceDir, outputBase, platform string) []string {
 	return compiledDirs
 }
 
-func Build() {
+func Build(binaries []string) {
 	if _, err := os.Stat("start-config.yml"); err == nil {
 		InitForSSC()
 		KillExistBinaries()
 	}
+
+	InitForSSC()
 	platforms := os.Getenv("PLATFORMS")
 	if platforms == "" {
 		platforms = DetectPlatform()
 	}
 	for _, platform := range strings.Split(platforms, " ") {
-		CompileForPlatform(platform)
+		compileBinaries := binaries
+		if len(compileBinaries) == 0 {
+			// build all
+			compileBinaries = getAllBinaries()
+		}
+		CompileForPlatform(platform, compileBinaries)
 	}
 	PrintGreen("All binaries under cmd and tools were successfully compiled.")
+}
+
+func getAllBinaries() []string {
+	cmdDirs, _ := filepath.Glob(filepath.Join(rootDirPath, "cmd", "*"))
+	toolsDirs, _ := filepath.Glob(filepath.Join(rootDirPath, "tools", "*"))
+
+	var allBinaries []string
+	for _, dir := range cmdDirs {
+		allBinaries = append(allBinaries, filepath.Base(dir))
+	}
+	// TODO! need split toolsDirs
+	for _, dir := range toolsDirs {
+		allBinaries = append(allBinaries, filepath.Base(dir))
+	}
+	return allBinaries
 }

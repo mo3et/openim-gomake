@@ -4,14 +4,41 @@
 package main
 
 import (
-	"github.com/openimsdk/gomake/mageutil"
+	"fmt"
 	"os"
+	"strings"
+
+	"github.com/mo3et/openim-gomake/mageutil"
 )
 
 var Default = Build
 
+func parseBinFlag(args []string) string {
+	for i, arg := range args {
+		if arg == "-bin" || arg == "--bin" {
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+		} else if strings.HasPrefix(arg, "-bin=") || strings.HasPrefix(arg, "--bin=") {
+			parts := strings.SplitN(arg, "=", 2)
+			if len(parts) == 2 {
+				return parts[1]
+			}
+		}
+	}
+	return ""
+}
+
 func Build() {
-	mageutil.Build()
+	var binaryList []string
+
+	binFlag := parseBinFlag(os.Args)
+
+	if binFlag != "" {
+		binaryList = strings.Split(binFlag, ",")
+	}
+	fmt.Println("binaryList: ", binaryList)
+	mageutil.Build(binaryList)
 }
 
 func Start() {
