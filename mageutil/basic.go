@@ -281,85 +281,123 @@ func getBinaries(binaries []string) []string {
 
 	var allBinaries []string
 	baseDirPatterns := []string{
-		filepath.Join(rootDirPath, "cmd", "*"),
-		filepath.Join(rootDirPath, "tools", "*"),
+		filepath.Join(rootDirPath, "cmd"),
+		filepath.Join(rootDirPath, "tools"),
 	}
 
-	for _, pattern := range baseDirPatterns {
-		baseDirs, err := filepath.Glob(pattern)
+	for _, baseDir := range baseDirPatterns {
+		binaries, err := getSubDirectoriesBFS(baseDir)
 		if err != nil {
-			PrintYellow(fmt.Sprintf("Failed to glob pattern %s: %v", pattern, err))
+			PrintYellow(fmt.Sprintf("Failed to glob pattern %s: %v", baseDir, err))
 			continue
 		}
 
-		for _, baseDir := range baseDirs {
-			info, err := os.Stat(baseDir)
-			if err != nil || !info.IsDir() {
-				// PrintYellow(fmt.Sprintf("Path %s is not a directory or cannot be accessed.", baseDir))
-				continue
-			}
+		prefix := filepath.Base(baseDir)
 
-			binaries, err := getSubDirectoriesRecursively(baseDir, baseDir)
-			if err != nil {
-				PrintYellow(fmt.Sprintf("Failed to read directory %s: %v", baseDir, err))
-				continue
-			}
-
-			// baseRelative, err := filepath.Rel(filepath.Join(rootDirPath, filepath.Base(baseDir)), baseDir)
-			// if err != nil {
-			// 	PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", baseDir, err))
-			// 	continue
-			// }
-			baseName := filepath.Base(baseDir)
-
-			for _, bin := range binaries {
-				relPath := filepath.Join(baseName, bin)
-				allBinaries = append(allBinaries, relPath)
-				PrintBlue(fmt.Sprintf("Discovered binary: %s", relPath)) //debugging
-			}
-
-			PrintBlue(fmt.Sprintf("Found binaries in %s: %v", baseDir, binaries))
+		for _, bin := range binaries {
+			fullPath := filepath.Join(prefix, bin) // e.g., "cmd/openim-rpc/openim-rpc-user" 或 "tools/seq"
+			allBinaries = append(allBinaries, fullPath)
+			PrintBlue(fmt.Sprintf("Discovered binary: %s", fullPath))
 		}
+
+		PrintBlue(fmt.Sprintf("Found binaries in %s: %v", baseDir, binaries))
 	}
-	fmt.Println("All discovered binaries:", allBinaries)
+
+	fmt.Println("All discovered binaries:", allBinaries) // 调试信息
 	return allBinaries
+
+	// 	for _, baseDir := range baseDirs {
+	// 		info, err := os.Stat(baseDir)
+	// 		if err != nil || !info.IsDir() {
+	// 			// PrintYellow(fmt.Sprintf("Path %s is not a directory or cannot be accessed.", baseDir))
+	// 			continue
+	// 		}
+
+	// 		binaries, err := getSubDirectoriesRecursively(baseDir, baseDir)
+	// 		if err != nil {
+	// 			PrintYellow(fmt.Sprintf("Failed to read directory %s: %v", baseDir, err))
+	// 			continue
+	// 		}
+
+	// 		// baseRelative, err := filepath.Rel(filepath.Join(rootDirPath, filepath.Base(baseDir)), baseDir)
+	// 		// if err != nil {
+	// 		// 	PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", baseDir, err))
+	// 		// 	continue
+	// 		// }
+	// 		baseName := filepath.Base(baseDir)
+
+	// 		for _, bin := range binaries {
+	// 			relPath := filepath.Join(baseName, bin)
+	// 			allBinaries = append(allBinaries, relPath)
+	// 			PrintBlue(fmt.Sprintf("Discovered binary: %s", relPath)) //debugging
+	// 		}
+
+	// 		PrintBlue(fmt.Sprintf("Found binaries in %s: %v", baseDir, binaries))
+	// 	}
+	// }
+	// fmt.Println("All discovered binaries:", allBinaries)
+	// return allBinaries
 }
 
-func getSubDirectoriesRecursively(baseDir, dir string) ([]string, error) {
+func getSubDirectoriesBFS(baseDir string) ([]string, error) {
 	var subDirs []string
+	var queue []string
+	var mu sync.Mutex
 
-	entries, err := os.ReadDir(dir)
+	entries, err := os.ReadDir(baseDir)
 	if err != nil {
 		return subDirs, err
 	}
 
 	for _, entry := range entries {
 		if entry.IsDir() {
-			subDirPath := filepath.Join(dir, entry.Name())
-			if containsMainGo(subDirPath) {
-				subDirs = append(subDirs, subDirPath)
+			name := entry.Name()
+			if strings.HasPrefix(name, ".") || strings.EqualFold(name, "internal") {
+				// PrintYellow(fmt.Sprintf("Skipping excluded directory: %s", name))
 				continue
 			}
+			subDirPath := filepath.Join(baseDir, name)
+			queue = append(queue, subDirPath)
+		}
+	}
 
-			nestedSubDirs, err := getSubDirectoriesRecursively(baseDir, subDirPath)
+	for len(queue) > 0 {
+		currentDir := queue[0]
+		queue = queue[1:]
+
+		if containsMainGo(currentDir) {
+			relPath, err := filepath.Rel(baseDir, currentDir)
 			if err != nil {
-				PrintYellow(fmt.Sprintf("Failed to read nested directory %s: %v", subDirPath, err))
+				// PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", currentDir, err))
 				continue
 			}
-			subDirs = append(subDirs, nestedSubDirs...)
+			mu.Lock()
+			subDirs = append(subDirs, relPath)
+			mu.Unlock()
+			PrintBlue(fmt.Sprintf("Added binary directory: %s", relPath))
+			continue
 		}
 
-	}
-	return subDirs, nil
-}
+		entries, err := os.ReadDir(currentDir)
+		if err != nil {
+			PrintYellow(fmt.Sprintf("Failed to read directory %s: %v", currentDir, err))
+			continue
+		}
 
-func containsMainGo(dir string) bool {
-	mainGoPath := filepath.Join(dir, "main.go")
-	info, err := os.Stat(mainGoPath)
-	if err != nil {
-		return false
+		for _, entry := range entries {
+			if entry.IsDir() {
+				name := entry.Name()
+				if strings.HasPrefix(name, ".") || strings.EqualFold(name, "internal") {
+					PrintYellow(fmt.Sprintf("Skipping excluded directory: %s", name))
+					continue
+				}
+				subDirPath := filepath.Join(currentDir, name)
+				queue = append(queue, subDirPath)
+			}
+		}
 	}
-	return !info.IsDir()
+
+	return subDirs, nil
 }
 
 func findBinaryPath(baseDir, binaryName string) (string, bool) {
@@ -388,12 +426,95 @@ func findBinaryPath(baseDir, binaryName string) (string, bool) {
 	return "", false
 }
 
+func containsMainGo(dir string) bool {
+	mainGoPath := filepath.Join(dir, "main.go")
+	info, err := os.Stat(mainGoPath)
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
+}
+
 func isCmdBinary(binary string) (string, bool) {
 	path, found := findBinaryPath(filepath.Join(rootDirPath, "cmd"), binary)
-	return path, found
+	if found {
+		return filepath.Join("cmd", path), true
+	}
+	return "", false
 }
 
 func isToolBinary(binary string) (string, bool) {
 	path, found := findBinaryPath(filepath.Join(rootDirPath, "tools"), binary)
-	return path, found
+	if found {
+		return filepath.Join("tools", path), true
+	}
+	return "", false
 }
+
+// func getSubDirectoriesRecursively(baseDir, dir string) ([]string, error) {
+// 	var subDirs []string
+
+// 	entries, err := os.ReadDir(dir)
+// 	if err != nil {
+// 		return subDirs, err
+// 	}
+
+// 	for _, entry := range entries {
+// 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || strings.EqualFold(entry.Name(), "internal") {
+// 			continue
+// 		}
+
+// 		if entry.IsDir() {
+// 			subDirPath := filepath.Join(dir, entry.Name())
+// 			if containsMainGo(subDirPath) {
+// 				subDirs = append(subDirs, subDirPath)
+// 				continue
+// 			}
+
+// 			nestedSubDirs, err := getSubDirectoriesRecursively(baseDir, subDirPath)
+// 			if err != nil {
+// 				PrintYellow(fmt.Sprintf("Failed to read nested directory %s: %v", subDirPath, err))
+// 				continue
+// 			}
+// 			subDirs = append(subDirs, nestedSubDirs...)
+// 		}
+
+// 	}
+// 	return subDirs, nil
+// }
+
+// func findBinaryPath(baseDir, binaryName string) (string, bool) {
+// 	entries, err := os.ReadDir(baseDir)
+// 	if err != nil {
+// 		PrintYellow(fmt.Sprintf("Failed to read directory %s: %v", baseDir, err))
+// 		return "", false
+// 	}
+
+// 	for _, entry := range entries {
+// 		if entry.IsDir() {
+// 			subDirPath := filepath.Join(baseDir, entry.Name())
+// 			if entry.Name() == binaryName {
+// 				relativePath, err := filepath.Rel(baseDir, subDirPath)
+// 				if err != nil {
+// 					PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", subDirPath, err))
+// 					continue
+// 				}
+// 				return relativePath, true
+// 			}
+// 			if path, found := findBinaryPath(subDirPath, binaryName); found {
+// 				return filepath.Join(entry.Name(), path), true
+// 			}
+// 		}
+// 	}
+// 	return "", false
+// }
+
+// func isCmdBinary(binary string) (string, bool) {
+// 	path, found := findBinaryPath(filepath.Join(rootDirPath, "cmd"), binary)
+// 	return path, found
+// }
+
+// func isToolBinary(binary string) (string, bool) {
+// 	path, found := findBinaryPath(filepath.Join(rootDirPath, "tools"), binary)
+// 	return path, found
+// }
