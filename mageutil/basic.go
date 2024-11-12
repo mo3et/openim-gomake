@@ -293,7 +293,7 @@ func getBinaries(binaries []string) []string {
 		for _, baseDir := range baseDirs {
 			info, err := os.Stat(baseDir)
 			if err != nil || !info.IsDir() {
-				PrintYellow(fmt.Sprintf("Path %s is not a directory or cannot be accessed.", baseDir))
+				// PrintYellow(fmt.Sprintf("Path %s is not a directory or cannot be accessed.", baseDir))
 				continue
 			}
 
@@ -303,14 +303,17 @@ func getBinaries(binaries []string) []string {
 				continue
 			}
 
+			// baseRelative, err := filepath.Rel(filepath.Join(rootDirPath, filepath.Base(baseDir)), baseDir)
+			// if err != nil {
+			// 	PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", baseDir, err))
+			// 	continue
+			// }
+			baseName := filepath.Base(baseDir)
+
 			for _, bin := range binaries {
-				// relPath, err := filepath.Rel(rootDirPath, bin)
-				// if err != nil {
-				// 	PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", bin, err))
-				// 	continue
-				// }
-				allBinaries = append(allBinaries, bin)
-				PrintBlue(fmt.Sprintf("Discovered binary: %s", bin)) //debugging
+				relPath := filepath.Join(baseName, bin)
+				allBinaries = append(allBinaries, relPath)
+				PrintBlue(fmt.Sprintf("Discovered binary: %s", relPath)) //debugging
 			}
 
 			PrintBlue(fmt.Sprintf("Found binaries in %s: %v", baseDir, binaries))
@@ -329,6 +332,10 @@ func getSubDirectoriesRecursively(baseDir, dir string) ([]string, error) {
 	}
 
 	for _, entry := range entries {
+		// if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+		// 	continue
+		// }
+
 		if entry.IsDir() {
 			subDirPath := filepath.Join(dir, entry.Name())
 			if containsMainGo(subDirPath) {
@@ -337,17 +344,18 @@ func getSubDirectoriesRecursively(baseDir, dir string) ([]string, error) {
 					return subDirs, err
 				}
 				subDirs = append(subDirs, relPath)
-			} else {
-				nestedSubDirs, err := getSubDirectoriesRecursively(baseDir, subDirPath)
-				if err != nil {
-					PrintYellow(fmt.Sprintf("Failed to read nested directory %s: %v", subDirPath, err))
-					continue
-				}
-				subDirs = append(subDirs, nestedSubDirs...)
+				continue
 			}
-		}
-	}
 
+			nestedSubDirs, err := getSubDirectoriesRecursively(baseDir, subDirPath)
+			if err != nil {
+				PrintYellow(fmt.Sprintf("Failed to read nested directory %s: %v", subDirPath, err))
+				continue
+			}
+			subDirs = append(subDirs, nestedSubDirs...)
+		}
+
+	}
 	return subDirs, nil
 }
 
