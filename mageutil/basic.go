@@ -350,7 +350,7 @@ func getSubDirectoriesBFS(baseDir string) ([]string, error) {
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && !strings.EqualFold(entry.Name(), "internal") {
 			name := entry.Name()
 			if strings.HasPrefix(name, ".") || strings.EqualFold(name, "internal") {
 				// PrintYellow(fmt.Sprintf("Skipping excluded directory: %s", name))
