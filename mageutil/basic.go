@@ -271,8 +271,8 @@ func getBinaries(binaries []string) []string {
 
 	var allBinaries []string
 	baseDirPatterns := []string{
-		filepath.Join(OpenIMRoot, "cmd", "*"),
-		filepath.Join(OpenIMRoot, "tools", "*"),
+		filepath.Join(rootDirPath, "cmd", "*"),
+		filepath.Join(rootDirPath, "tools", "*"),
 	}
 
 	for _, pattern := range baseDirPatterns {
@@ -296,7 +296,7 @@ func getBinaries(binaries []string) []string {
 			}
 
 			for _, bin := range binaries {
-				relPath, err := filepath.Rel(OpenIMRoot, bin)
+				relPath, err := filepath.Rel(rootDirPath, bin)
 				if err != nil {
 					PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", bin, err))
 					continue
