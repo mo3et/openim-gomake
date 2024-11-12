@@ -95,9 +95,11 @@ func CompileForPlatform(platform string, compileBinaries []string) {
 
 	for _, binary := range compileBinaries {
 		if strings.HasPrefix(binary, "tools/") {
-			toolsBinaries = append(toolsBinaries, binary)
+			toolsBinaries = append(toolsBinaries, strings.TrimPrefix(binary, "tools/"))
+		} else if strings.HasPrefix(binary, "cmd/") {
+			cmdBinaries = append(cmdBinaries, strings.TrimPrefix(binary, "cmd/"))
 		} else {
-			cmdBinaries = append(cmdBinaries, binary)
+			PrintYellow(fmt.Sprintf("Binary %s does not have a valid prefix. Skipping...", binary))
 		}
 	}
 
@@ -332,18 +334,10 @@ func getSubDirectoriesRecursively(baseDir, dir string) ([]string, error) {
 	}
 
 	for _, entry := range entries {
-		// if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-		// 	continue
-		// }
-
 		if entry.IsDir() {
 			subDirPath := filepath.Join(dir, entry.Name())
 			if containsMainGo(subDirPath) {
-				relPath, err := filepath.Rel(baseDir, subDirPath)
-				if err != nil {
-					return subDirs, err
-				}
-				subDirs = append(subDirs, relPath)
+				subDirs = append(subDirs, subDirPath)
 				continue
 			}
 
