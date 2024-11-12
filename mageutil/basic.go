@@ -94,12 +94,10 @@ func CompileForPlatform(platform string, compileBinaries []string) {
 	var cmdBinaries, toolsBinaries []string
 
 	for _, binary := range compileBinaries {
-		if isCmdBinary(binary) {
-			cmdBinaries = append(cmdBinaries, binary)
-		} else if isToolBinary(binary) {
+		if strings.HasPrefix(binary, "tools/") {
 			toolsBinaries = append(toolsBinaries, binary)
 		} else {
-			PrintYellow(fmt.Sprintf("Binary %s not found in cmd or tools directories. Skipping...", binary))
+			cmdBinaries = append(cmdBinaries, binary)
 		}
 	}
 
@@ -108,14 +106,15 @@ func CompileForPlatform(platform string, compileBinaries []string) {
 
 	if len(cmdBinaries) > 0 {
 		PrintBlue(fmt.Sprintf("Compiling cmd binaries for %s...", platform))
-		cmdCompiledDirs = compileDir(filepath.Join(rootDirPath, "cmd"), platformsOutputBase, platform, cmdBinaries)
+		cmdCompiledDirs = compileDir(filepath.Join(rootDirPath, "cmd"), platformsOutputBase, platform, cmdCompiledDirs)
 	}
 
 	if len(toolsBinaries) > 0 {
 		PrintBlue(fmt.Sprintf("Compiling tools binaries for %s...", platform))
-		toolsCompiledDirs = compileDir(filepath.Join(rootDirPath, "tools"), toolsOutputBase, platform, toolsBinaries)
+		toolsCompiledDirs = compileDir(filepath.Join(rootDirPath, "tools"), toolsOutputBase, platform, toolsCompiledDirs)
 	}
 
+	fmt.Println("cmdCompiledDirs: ", cmdCompiledDirs, " toolsCompiledDirs: ", toolsCompiledDirs)
 	createStartConfigYML(cmdCompiledDirs, toolsCompiledDirs)
 }
 
@@ -247,41 +246,143 @@ func Build(binaries []string) {
 	if platforms == "" {
 		platforms = DetectPlatform()
 	}
+	compileBinaries := getBinaries(binaries)
+
 	for _, platform := range strings.Split(platforms, " ") {
-		compileBinaries := binaries
-		if len(compileBinaries) == 0 {
-			// build all
-			compileBinaries = getAllBinaries()
-		}
 		CompileForPlatform(platform, compileBinaries)
 	}
 	PrintGreen("All specified binaries under cmd and tools were successfully compiled.")
 }
 
-func getAllBinaries() []string {
-	cmdDirs, _ := filepath.Glob(filepath.Join(rootDirPath, "cmd", "*"))
-	toolsDirs, _ := filepath.Glob(filepath.Join(rootDirPath, "tools", "*"))
-
-	var allBinaries []string
-	for _, dir := range cmdDirs {
-		allBinaries = append(allBinaries, filepath.Base(dir))
+func getBinaries(binaries []string) []string {
+	if len(binaries) > 0 {
+		var resolved []string
+		for _, binary := range binaries {
+			if path, found := isCmdBinary(binary); found {
+				resolved = append(resolved, path)
+			} else if path, found := isToolBinary(binary); found {
+				resolved = append(resolved, path)
+			} else {
+				PrintYellow(fmt.Sprintf("Binary %s not found in cmd or tools directories. Skipping...", binary))
+			}
+		}
+		return resolved
 	}
 
-	for _, dir := range toolsDirs {
-		allBinaries = append(allBinaries, filepath.Base(dir))
+	var allBinaries []string
+	baseDirPatterns := []string{
+		filepath.Join(OpenIMRoot, "cmd", "*"),
+		filepath.Join(OpenIMRoot, "tools", "*"),
+	}
+
+	for _, pattern := range baseDirPatterns {
+		baseDirs, err := filepath.Glob(pattern)
+		if err != nil {
+			PrintYellow(fmt.Sprintf("Failed to glob pattern %s: %v", pattern, err))
+			continue
+		}
+
+		for _, baseDir := range baseDirs {
+			info, err := os.Stat(baseDir)
+			if err != nil || !info.IsDir() {
+				PrintYellow(fmt.Sprintf("Path %s is not a directory or cannot be accessed.", baseDir))
+				continue
+			}
+
+			binaries, err := getSubDirectoriesRecursively(baseDir)
+			if err != nil {
+				PrintYellow(fmt.Sprintf("Failed to read directory %s: %v", baseDir, err))
+				continue
+			}
+
+			for _, bin := range binaries {
+				relPath, err := filepath.Rel(OpenIMRoot, bin)
+				if err != nil {
+					PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", bin, err))
+					continue
+				}
+				allBinaries = append(allBinaries, relPath)
+			}
+
+			PrintBlue(fmt.Sprintf("Found binaries in %s: %v", baseDir, binaries))
+		}
 	}
 
 	return allBinaries
 }
 
-func isCmdBinary(binary string) bool {
-	path := filepath.Join(rootDirPath, "cmd", binary)
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
+func getSubDirectoriesRecursively(dir string) ([]string, error) {
+	var subDirs []string
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return subDirs, err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			subDirPath := filepath.Join(dir, entry.Name())
+			if containsMainGo(subDirPath) {
+				relativePath, err := filepath.Rel(filepath.Dir(dir), subDirPath)
+				if err != nil {
+					return subDirs, err
+				}
+				subDirs = append(subDirs, relativePath)
+			} else {
+				nestedSubDirs, err := getSubDirectoriesRecursively(subDirPath)
+				if err != nil {
+					PrintYellow(fmt.Sprintf("Failed to read nested directory %s: %v", subDirPath, err))
+					continue
+				}
+				subDirs = append(subDirs, nestedSubDirs...)
+			}
+		}
+	}
+
+	return subDirs, nil
 }
 
-func isToolBinary(binary string) bool {
-	path := filepath.Join(rootDirPath, "tools", binary)
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
+func containsMainGo(dir string) bool {
+	mainGoPath := filepath.Join(dir, "main.go")
+	info, err := os.Stat(mainGoPath)
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
+}
+
+func findBinaryPath(baseDir, binaryName string) (string, bool) {
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		PrintYellow(fmt.Sprintf("Failed to read directory %s: %v", baseDir, err))
+		return "", false
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			subDirPath := filepath.Join(baseDir, entry.Name())
+			if entry.Name() == binaryName {
+				relativePath, err := filepath.Rel(filepath.Dir(baseDir), subDirPath)
+				if err != nil {
+					PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", subDirPath, err))
+					continue
+				}
+				return relativePath, true
+			}
+			if path, found := findBinaryPath(subDirPath, binaryName); found {
+				return path, true
+			}
+		}
+	}
+	return "", false
+}
+
+func isCmdBinary(binary string) (string, bool) {
+	path, found := findBinaryPath(filepath.Join(OpenIMOutputConfig, "cmd"), binary)
+	return path, found
+}
+
+func isToolBinary(binary string) (string, bool) {
+	path, found := findBinaryPath(OpenIMOutputTools, binary)
+	return path, found
 }
