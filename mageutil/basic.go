@@ -106,12 +106,12 @@ func CompileForPlatform(platform string, compileBinaries []string) {
 
 	if len(cmdBinaries) > 0 {
 		PrintBlue(fmt.Sprintf("Compiling cmd binaries for %s...", platform))
-		cmdCompiledDirs = compileDir(filepath.Join(rootDirPath, "cmd"), platformsOutputBase, platform, cmdCompiledDirs)
+		cmdCompiledDirs = compileDir(filepath.Join(rootDirPath, "cmd"), OpenIMOutputBinPath, platform, cmdBinaries)
 	}
 
 	if len(toolsBinaries) > 0 {
 		PrintBlue(fmt.Sprintf("Compiling tools binaries for %s...", platform))
-		toolsCompiledDirs = compileDir(filepath.Join(rootDirPath, "tools"), toolsOutputBase, platform, toolsCompiledDirs)
+		toolsCompiledDirs = compileDir(filepath.Join(rootDirPath, "tools"), OpenIMOutputBinToolPath, platform, toolsBinaries)
 	}
 
 	fmt.Println("cmdCompiledDirs: ", cmdCompiledDirs, " toolsCompiledDirs: ", toolsCompiledDirs)
@@ -383,6 +383,6 @@ func isCmdBinary(binary string) (string, bool) {
 }
 
 func isToolBinary(binary string) (string, bool) {
-	path, found := findBinaryPath(rootDirPath, binary)
+	path, found := findBinaryPath(filepath.Join(rootDirPath, "tools"), binary)
 	return path, found
 }
