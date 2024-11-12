@@ -130,7 +130,7 @@ func PrintListenedPortsByBinaries() error {
 	if err != nil {
 		return err
 	}
-	for binary, _ := range serviceBinaries {
+	for binary := range serviceBinaries {
 		basePath := GetBinFullPath(binary)
 		fullPath := basePath
 		PrintBinaryPorts(fullPath, ps)
