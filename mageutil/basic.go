@@ -89,14 +89,34 @@ func StartToolsAndServices() {
 // CompileForPlatform Main compile function
 func CompileForPlatform(platform string, compileBinaries []string) {
 
-	PrintBlue(fmt.Sprintf("Compiling cmd for %s...", platform))
+	PrintBlue(fmt.Sprintf("Compiling for platform: %s...", platform))
 
-	cmdCompiledDirs := compileDir(filepath.Join(rootDirPath, "cmd"), platformsOutputBase, platform)
+	var cmdBinaries, toolsBinaries []string
 
-	PrintBlue(fmt.Sprintf("Compiling tools for %s...", platform))
-	toolsCompiledDirs := compileDir(filepath.Join(rootDirPath, "tools"), toolsOutputBase, platform)
+	for _, binary := range compileBinaries {
+		if isCmdBinary(binary) {
+			cmdBinaries = append(cmdBinaries, binary)
+		} else if isToolBinary(binary) {
+			toolsBinaries = append(toolsBinaries, binary)
+		} else {
+			PrintYellow(fmt.Sprintf("Binary %s not found in cmd or tools directories. Skipping...", binary))
+		}
+	}
+
+	var cmdCompiledDirs []string
+	var toolsCompiledDirs []string
+
+	if len(cmdBinaries) > 0 {
+		PrintBlue(fmt.Sprintf("Compiling cmd binaries for %s...", platform))
+		cmdCompiledDirs = compileDir(filepath.Join(rootDirPath, "cmd"), platformsOutputBase, platform, cmdBinaries)
+	}
+
+	if len(toolsBinaries) > 0 {
+		PrintBlue(fmt.Sprintf("Compiling tools binaries for %s...", platform))
+		toolsCompiledDirs = compileDir(filepath.Join(rootDirPath, "tools"), toolsOutputBase, platform, toolsBinaries)
+	}
+
 	createStartConfigYML(cmdCompiledDirs, toolsCompiledDirs)
-
 }
 
 func createStartConfigYML(cmdDirs, toolsDirs []string) {
@@ -126,7 +146,7 @@ func createStartConfigYML(cmdDirs, toolsDirs []string) {
 	PrintGreen("start-config.yml created successfully.")
 }
 
-func compileDir(sourceDir, outputBase, platform string) []string {
+func compileDir(sourceDir, outputBase, platform string, compileBinaries []string) []string {
 	if info, err := os.Stat(sourceDir); err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -137,6 +157,7 @@ func compileDir(sourceDir, outputBase, platform string) []string {
 		fmt.Printf("Failed %s is not dir\n", sourceDir)
 		os.Exit(1)
 	}
+
 	var compiledDirs []string
 	var mu sync.Mutex
 	targetOS, targetArch := strings.Split(platform, "_")[0], strings.Split(platform, "_")[1]
@@ -151,6 +172,11 @@ func compileDir(sourceDir, outputBase, platform string) []string {
 	errors := make(chan error, 1)
 	sem := make(chan struct{}, 4)
 
+	binSet := make(map[string]struct{})
+	for _, bin := range compileBinaries {
+		binSet[bin] = struct{}{}
+	}
+
 	err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -159,21 +185,34 @@ func compileDir(sourceDir, outputBase, platform string) []string {
 			return nil
 		}
 
+		dir := filepath.Dir(path)
+		dirName := filepath.Base(dir)
+
+		if len(binSet) > 0 {
+			if _, exists := binSet[dirName]; !exists {
+				return nil
+			}
+		}
+
 		wg.Add(1)
-		go func() {
+		go func(dir, dirName string) {
 			sem <- struct{}{}
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			dir := filepath.Dir(path)
-			dirName := filepath.Base(dir)
 			outputFileName := dirName
 			if targetOS == "windows" {
 				outputFileName += ".exe"
 			}
 
+			outputPath := filepath.Join(outputDir, outputFileName)
+
 			PrintBlue(fmt.Sprintf("Compiling dir: %s for platform: %s binary: %s ...", dirName, platform, outputFileName))
-			err := sh.RunWith(map[string]string{"GOOS": targetOS, "GOARCH": targetArch}, "go", "build", "-o", filepath.Join(outputDir, outputFileName), filepath.Join(dir, "main.go"))
+			err := sh.RunWith(map[string]string{
+				"GOOS":   targetOS,
+				"GOARCH": targetArch,
+			},
+				"go", "build", "-o", outputPath, filepath.Join(dir, "main.go"))
 			if err != nil {
 				errors <- fmt.Errorf("failed to compile %s for %s: %v", dirName, platform, err)
 				PrintRed("Compilation aborted. " + fmt.Sprintf("failed to compile %s for %s: %v", dirName, platform, err))
@@ -184,7 +223,7 @@ func compileDir(sourceDir, outputBase, platform string) []string {
 			mu.Lock()
 			compiledDirs = append(compiledDirs, dirName)
 			mu.Unlock()
-		}()
+		}(dir, dirName)
 
 		return nil
 	})
@@ -202,6 +241,7 @@ func compileDir(sourceDir, outputBase, platform string) []string {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
 	return compiledDirs
 }
 
@@ -224,7 +264,7 @@ func Build(binaries []string) {
 		}
 		CompileForPlatform(platform, compileBinaries)
 	}
-	PrintGreen("All binaries under cmd and tools were successfully compiled.")
+	PrintGreen("All specified binaries under cmd and tools were successfully compiled.")
 }
 
 func getAllBinaries() []string {
@@ -235,9 +275,22 @@ func getAllBinaries() []string {
 	for _, dir := range cmdDirs {
 		allBinaries = append(allBinaries, filepath.Base(dir))
 	}
-	// TODO! need split toolsDirs
+
 	for _, dir := range toolsDirs {
 		allBinaries = append(allBinaries, filepath.Base(dir))
 	}
+
 	return allBinaries
+}
+
+func isCmdBinary(binary string) bool {
+	path := filepath.Join(rootDirPath, "cmd", binary)
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+func isToolBinary(binary string) bool {
+	path := filepath.Join(rootDirPath, "tools", binary)
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
