@@ -187,12 +187,12 @@ func compileDir(sourceDir, outputBase, platform string, compileBinaries []string
 			}
 
 			dir := filepath.Dir(path)
-			// dirName := filepath.Base(dir)
-			relPath, err := filepath.Rel(sourceDir, dir)
-			if err != nil {
-				PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", dir, err))
-				return nil
-			}
+			dirName := filepath.Base(dir)
+			// relPath, err := filepath.Rel(sourceDir, dir)
+			// if err != nil {
+			// 	PrintYellow(fmt.Sprintf("Failed to get relative path for %s: %v", dir, err))
+			// 	return nil
+			// }
 
 			wg.Add(1)
 			go func(dir, dirName string) {
@@ -205,22 +205,22 @@ func compileDir(sourceDir, outputBase, platform string, compileBinaries []string
 					outputFileName += ".exe"
 				}
 
-				PrintBlue(fmt.Sprintf("Compiling dir: %s for platform: %s binary: %s ...", relPath, platform, outputFileName))
+				PrintBlue(fmt.Sprintf("Compiling dir: %s for platform: %s binary: %s ...", dirName, platform, outputFileName))
 				err := sh.RunWith(map[string]string{
 					"GOOS":   targetOS,
 					"GOARCH": targetArch,
 				}, "go", "build", "-o", filepath.Join(outputDir, outputFileName), path)
 				if err != nil {
-					errors <- fmt.Errorf("failed to compile %s for %s: %v", relPath, platform, err)
-					PrintRed("Compilation aborted. " + fmt.Sprintf("failed to compile %s for %s: %v", relPath, platform, err))
+					errors <- fmt.Errorf("failed to compile %s for %s: %v", dirName, platform, err)
+					PrintRed("Compilation aborted. " + fmt.Sprintf("failed to compile %s for %s: %v", dirName, platform, err))
 					os.Exit(1)
 					return
 				}
-				PrintGreen(fmt.Sprintf("Successfully compiled. dir: %s for platform: %s binary: %s", relPath, platform, outputFileName))
+				PrintGreen(fmt.Sprintf("Successfully compiled. dir: %s for platform: %s binary: %s", dirName, platform, outputFileName))
 				mu.Lock()
-				compiledDirs = append(compiledDirs, relPath)
+				compiledDirs = append(compiledDirs, dirName)
 				mu.Unlock()
-			}(dir, relPath)
+			}(dir, dirName)
 
 			return nil
 		})
