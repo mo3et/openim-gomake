@@ -378,11 +378,11 @@ func findBinaryPath(baseDir, binaryName string) (string, bool) {
 }
 
 func isCmdBinary(binary string) (string, bool) {
-	path, found := findBinaryPath(filepath.Join(OpenIMOutputConfig, "cmd"), binary)
+	path, found := findBinaryPath(filepath.Join(rootDirPath, "cmd"), binary)
 	return path, found
 }
 
 func isToolBinary(binary string) (string, bool) {
-	path, found := findBinaryPath(OpenIMOutputTools, binary)
+	path, found := findBinaryPath(rootDirPath, binary)
 	return path, found
 }
