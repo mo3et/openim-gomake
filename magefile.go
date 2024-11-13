@@ -7,7 +7,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/openimsdk/gomake/mageutil"
+	"github.com/mo3et/openim-gomake/mageutil"
 )
 
 var Default = Build
