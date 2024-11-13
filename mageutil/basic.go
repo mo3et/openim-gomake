@@ -105,12 +105,12 @@ func CompileForPlatform(platform string, compileBinaries []string) {
 
 	if len(cmdBinaries) > 0 {
 		PrintBlue(fmt.Sprintf("Compiling cmd binaries for %s...", platform))
-		cmdCompiledDirs = compileDir(filepath.Join(rootDirPath, "cmd"), OpenIMOutputBinPath, platform, cmdBinaries)
+		cmdCompiledDirs = compileDir(filepath.Join(rootDirPath, "cmd"), platformsOutputBase, platform, cmdBinaries)
 	}
 
 	if len(toolsBinaries) > 0 {
 		PrintBlue(fmt.Sprintf("Compiling tools binaries for %s...", platform))
-		toolsCompiledDirs = compileDir(filepath.Join(rootDirPath, "tools"), OpenIMOutputBinToolPath, platform, toolsBinaries)
+		toolsCompiledDirs = compileDir(filepath.Join(rootDirPath, "tools"), toolsOutputBase, platform, toolsBinaries)
 	}
 
 	createStartConfigYML(cmdCompiledDirs, toolsCompiledDirs)
@@ -160,6 +160,7 @@ func compileDir(sourceDir, outputBase, platform string, compileBinaries []string
 	targetOS, targetArch := strings.Split(platform, "_")[0], strings.Split(platform, "_")[1]
 	outputDir := filepath.Join(outputBase, targetOS, targetArch)
 
+	PrintBlue(outputDir)
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		fmt.Printf("Failed to create directory %s: %v\n", outputDir, err)
 		os.Exit(1)
