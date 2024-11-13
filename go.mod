@@ -4,7 +4,7 @@ go 1.21.2
 
 require (
 	github.com/magefile/mage v1.15.0
-	github.com/openimsdk/gomake v0.0.13
+	// github.com/openimsdk/gomake v0.0.13
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	gopkg.in/yaml.v3 v3.0.1
 )

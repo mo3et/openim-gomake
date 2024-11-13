@@ -160,9 +160,13 @@ func compileDir(sourceDir, outputBase, platform string, compileBinaries []string
 	targetOS, targetArch := strings.Split(platform, "_")[0], strings.Split(platform, "_")[1]
 	outputDir := filepath.Join(outputBase, targetOS, targetArch)
 
-	PrintBlue(outputDir)
+	fmt.Println("正在尝试创建目录:", outputDir)
+
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		fmt.Printf("Failed to create directory %s: %v\n", outputDir, err)
+		fmt.Printf("无法创建 outputBase 目录 %s: %v\n", outputBase, err)
+
+		// fmt.Printf("Failed to create directory %s: %v\n", outputDir, err)
+
 		os.Exit(1)
 	}
 
