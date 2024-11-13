@@ -4,41 +4,23 @@
 package main
 
 import (
-	"fmt"
+	"flag"
 	"os"
-	"strings"
 
 	"github.com/mo3et/openim-gomake/mageutil"
 )
 
 var Default = Build
 
-func parseBinFlag(args []string) string {
-	for i, arg := range args {
-		if arg == "-bin" || arg == "--bin" {
-			if i+1 < len(args) {
-				return args[i+1]
-			}
-		} else if strings.HasPrefix(arg, "-bin=") || strings.HasPrefix(arg, "--bin=") {
-			parts := strings.SplitN(arg, "=", 2)
-			if len(parts) == 2 {
-				return parts[1]
-			}
-		}
-	}
-	return ""
-}
-
 func Build() {
-	var binaryList []string
+	flag.Parse()
 
-	binFlag := parseBinFlag(os.Args)
-
-	if binFlag != "" {
-		binaryList = strings.Split(binFlag, ",")
+	bin := flag.Args()
+	if len(bin) != 0 {
+		bin = bin[1:]
 	}
-	fmt.Println("binaryList: ", binaryList)
-	mageutil.Build(binaryList)
+
+	mageutil.Build(bin)
 }
 
 func Start() {
@@ -57,8 +39,4 @@ func Stop() {
 
 func Check() {
 	mageutil.CheckAndReportBinariesStatus()
-}
-
-func Protocol() {
-	mageutil.Protocol()
 }
